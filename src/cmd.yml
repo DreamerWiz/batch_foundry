@@ -1,0 +1,25 @@
+COMMAND_NAME: brix_foundry
+VERSION: "1.0"
+AUTHOR: Wiz Lee
+ABOUT: Developer's tool for urlencode and time format!
+
+SUBCOMMAND_REQUIRED: true
+ARG_REQUIRED_ELSE_HELP: true
+
+SUB_COMMANDS:
+  - COMMAND_NAME: client
+    ABOUT: start a client end to commit judgement request
+    ARGS:
+      - NAME: json
+        SHORT_NAME: J
+      - NAME: host
+        SHORT_NAME: h
+      - NAME: port
+        SHORT_NAME: p
+  - COMMAND_NAME: server
+    ABOUT: start the server to receive judgement request
+    ARGS:
+      - NAME: host
+        SHORT_NAME: h
+      - NAME: port
+        SHORT_NAME: p
