@@ -19,3 +19,8 @@ Cargo.lock
 /target
 
 /docker/foundry/*.tar.gz
+
+/cache
+/out
+/tmp_out
+/tmp

@@ -1,9 +1,7 @@
 use std::{borrow::Borrow, env, process::exit};
 
-use chrono::{Local, TimeZone};
 use clap::{parser::ValueSource, Arg, ArgMatches, Command};
 use log::trace;
-use urlencoding::{decode, encode};
 
 mod client;
 mod server;
@@ -13,20 +11,6 @@ const COMMAND_NAME: &str = "test";
 const VERSION: &str = "1.0";
 const AUTHOR: &str = "Wiz Lee wizdaydream@gmail.com";
 const ABOUT: &str = "Developer's tool for urlencode and time format!";
-
-fn load_yml() -> types::conf::Conf {
-    let config_yaml_str = include_str!("cmd.yml");
-
-    let res: Result<types::conf::Conf, serde_yaml::Error> = serde_yaml::from_str(config_yaml_str);
-    if res.is_err() {
-        print!("Parse yaml failed");
-        exit(-3);
-    } else {
-    }
-
-    res.unwrap()
-}
-
 fn main() {
     let matches = Command::new(COMMAND_NAME)
         .version(VERSION)

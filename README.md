@@ -1,66 +1,89 @@
-## Foundry
+## Batch Foundry
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+**Batch Foundry is dedicated to facilitating batch processing tests using the Foundry testing framework. This repository aims to streamline and automate the testing process for developers, leveraging Foundry's capabilities to ensure code integrity and functionality across multiple batches simultaneously.**
 
-Foundry consists of:
+### Requirements
+|   Requirement       |     Github / Site   |   Doc       |
+|----------|----------|----------|
+| Foundry-rs | https://github.com/foundry-rs/foundry     | https://book.getfoundry.sh/     |
+| Rust    | https://www.rust-lang.org/     | https://docs.rs/     |
+|Redis| https://redis.io/ |  https://redis.io/docs/ |
+| * Docker    | https://www.docker.com/     | https://hub.docker.com/     |
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
 
-## Documentation
+> marked with * means it is not must required 
 
-https://book.getfoundry.sh/
+### Preparation
 
-## Usage
+Firstly, should setup the fourndry environment, we can easily get it from the command:
 
-### Build
-
-```shell
-$ forge build
+``` 
+curl -L https://foundry.paradigm.xyz | sh && ~/.foundry/bin/foundryup
 ```
 
-### Test
+And in the root path, we should run this comamnd to init for foundry environment.
 
-```shell
-$ forge test
+```
+forge init --force
 ```
 
-### Format
+Change the `src` path in `foundry.toml` to `contracts`, beacause it is conflicted with cargo/rust src directory.
 
-```shell
-$ forge fmt
+### Command Help
+
+Directly run `cargo run`, we can see the help information below:
+
+```
+Usage: judger <COMMAND>
+
+Commands:
+  server  Start the server
+  client  Send a request to the redis and receive result
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
-### Gas Snapshots
+There are two subcommands, run `cargo run server --help`:
 
-```shell
-$ forge snapshot
+```
+Start the server
+
+Usage: judger server [OPTIONS]
+
+Options:
+  -t, --thread-num <thread-num>
+          How many threads do you want [default: 5]
+  -r, --redis-host <redis-host>
+          Redis server [default: 127.0.0.1]
+  -p, --redis-prefix <redis-prefix>
+          Prefix of the redis operations [default: smc-open-solidity-judge]
+  -d, --worker-dir <worker-dir>
+          The default work directory of the foundry env [default: tmp/worker]
+  -n, --redis-list-name <redis-list-name>
+          Redis list name [default: test]
+  -h, --help
+          Print help
 ```
 
-### Anvil
+run `cargo run client --help`:
 
-```shell
-$ anvil
+```
+Send a request to the redis and receive result
+
+Usage: judger client [OPTIONS]
+
+Options:
+  -d, --directory <directory>        Root dir of the files (env: DIRECTORY) [default: usercode]
+  -n, --question-no <question-no>    Questino number of the input
+  -v, --solc-version <solc-version>  Solc version selected (env: SOLC_VERSION) [default: 0.8.20]
+  -j, --job-id <job-id>              Job id offered (env: JOB_ID)
+  -t, --timeout <timeout>            Timeout in secs (env: TIMEOUT) [default: 5]
+  -h, --help                         Print help
 ```
 
-### Deploy
+### Flowchart
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+![GitHub Logo](docs/flow.png)
