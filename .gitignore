@@ -23,4 +23,4 @@ Cargo.lock
 /cache
 /out
 /tmp_out
-/tmp
+/tmp/log/testbox
