@@ -87,3 +87,22 @@ Options:
 ## Flowchart
 
 ![GitHub Logo](docs/flow.png)
+
+
+## Docker env
+
+```shell
+sh script/pack_rust_src.sh && docker build -t <image_name> docker/foundry
+```
+
+If the installation does not run as expected, you can try proxx, but you should run the build in the host network, otherwise the process cannot access your proxy.
+
+```shell
+sh script/pack_rust_src.sh && docker build -t <image_name> --network host --build-arg http_proxy=http://<your proxy>:<your port> --build-arg https_proxy=http://http://<your proxy>:<your port> docker/foundry
+```
+
+We have make the alias in the dockerfile, so you can run `server/client`, it represents for `judger server/judger client`
+
+```shell
+docker run -t <image_name> server
+```
