@@ -1,8 +1,8 @@
-## Batch Foundry
+# Batch Foundry
 
 **Batch Foundry is dedicated to facilitating batch processing tests using the Foundry testing framework. This repository aims to streamline and automate the testing process for developers, leveraging Foundry's capabilities to ensure code integrity and functionality across multiple batches simultaneously.**
 
-### Requirements
+## Requirements
 |   Requirement       |     Github / Site   |   Doc       |
 |----------|----------|----------|
 | Foundry-rs | https://github.com/foundry-rs/foundry     | https://book.getfoundry.sh/     |
@@ -13,7 +13,7 @@
 
 > marked with * means it is not must required 
 
-### Preparation
+## Preparation
 
 Firstly, should setup the fourndry environment, we can easily get it from the command:
 
@@ -29,7 +29,7 @@ forge init --force
 
 Change the `src` path in `foundry.toml` to `contracts`, beacause it is conflicted with cargo/rust src directory.
 
-### Command Help
+## Command Help
 
 Directly run `cargo run`, we can see the help information below:
 
@@ -84,6 +84,6 @@ Options:
   -h, --help                         Print help
 ```
 
-### Flowchart
+## Flowchart
 
 ![GitHub Logo](docs/flow.png)
