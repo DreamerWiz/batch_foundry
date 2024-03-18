@@ -1,4 +1,5 @@
 use std::io::Empty;
+use std::mem::replace;
 use std::ops::{Deref, Div};
 use std::path::Path;
 use std::process::Command;
@@ -570,6 +571,7 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
         // Compile failure
         let re = Regex::new(r"\x1b\[[\d;]+m").unwrap();
         let result = re.replace_all(&stderr.as_str(), "").to_string();
+        let result = result.replace(&(base_path.as_os_str().to_str().unwrap().to_owned() + "/"), "");  // hide location info
 
         let mut json = json!({});
         json["info"] = json!("Compile failed");

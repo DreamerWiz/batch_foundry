@@ -24,3 +24,9 @@ Cargo.lock
 /out
 /tmp_out
 /tmp/log/testbox
+
+node_modules/
+package-lock.json
+package.json
+
+tmp/
