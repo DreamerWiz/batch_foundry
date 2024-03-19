@@ -1,5 +1,4 @@
 use std::io::Empty;
-use std::mem::replace;
 use std::ops::{Deref, Div};
 use std::path::Path;
 use std::process::Command;
@@ -24,6 +23,7 @@ use regex::Regex;
 /* WORKER_TERMINAL_COLORS
 
    @dev Colors used to distinguish different threads
+
    @author wizdaydream@gmail.com
 */
 const WORKER_TERMINAL_COLORS: [Color; 20] = [
@@ -62,7 +62,7 @@ macro_rules! color_log {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum ErrorCode {
+pub enum ErrorCode {
     RedisConnectErr(String),
     DataError(String),
     DataNotString(String),
@@ -197,15 +197,15 @@ fn create_files_as_job_message(
             .join(format!("{:02}", worker_num))
             .join(&job.question_no)
             .join(&j.path);
-        if !path.is_file() {
-            let rIndex = path.as_os_str().to_str().unwrap().rfind('/').unwrap();
-            let path_sub_str = &path.as_os_str().to_str().unwrap()[0..rIndex];
-            if Path::new(path_sub_str).exists() {
-            } else {
-                fs::create_dir_all(path_sub_str).unwrap();
-            }
-            fs::write(path.clone(), &j.content).unwrap();
+        // if !path.is_file() {
+        let rIndex = path.as_os_str().to_str().unwrap().rfind('/').unwrap();
+        let path_sub_str = &path.as_os_str().to_str().unwrap()[0..rIndex];
+        if Path::new(path_sub_str).exists() {
+        } else {
+            fs::create_dir_all(path_sub_str).unwrap();
         }
+        fs::write(path.clone(), &j.content).unwrap();
+        // }
         // info!("{}", color.paint(format!("{}", path.as_os_str().to_str().unwrap())));
     }
     Ok(())
@@ -571,7 +571,6 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
         // Compile failure
         let re = Regex::new(r"\x1b\[[\d;]+m").unwrap();
         let result = re.replace_all(&stderr.as_str(), "").to_string();
-        let result = result.replace(&(base_path.as_os_str().to_str().unwrap().to_owned() + "/"), "");  // hide location info
 
         let mut json = json!({});
         json["info"] = json!("Compile failed");
@@ -772,12 +771,16 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> 
     Ok(())
 }
 
-fn init_cache_file() -> Result<(), ErrorCode> {
+pub fn init_cache_file() -> Result<(), ErrorCode> {
     if Path::new("cache/example-cache.json").exists() {
         return Ok(());
     }
 
-    let version_vec = vec!["0.8.20", "0.8.21", "0.8.22", "0.8.23"];
+    let mut version_vec:Vec<String> = vec![];
+
+    for i in 0..23{
+        version_vec.push("0.8.".to_owned() + i.to_string().as_str());
+    }
 
     // Fistly, rebuild the out directory where the cache will be stored
     let _ = fs::remove_dir_all("out");
@@ -786,7 +789,7 @@ fn init_cache_file() -> Result<(), ErrorCode> {
 
     let _ = Command::new("forge").arg("clean").output();
 
-    let init_version = version_vec[0];
+    let init_version = &version_vec[0];
     let _ = Command::new("forge")
         .args([
             "build",
@@ -795,7 +798,7 @@ fn init_cache_file() -> Result<(), ErrorCode> {
             "--out",
             "tmp_out",
             "--use",
-            init_version,
+            &init_version,
         ])
         .output();
 
@@ -842,7 +845,7 @@ fn init_cache_file() -> Result<(), ErrorCode> {
 
     // execSync("cp -r tmp_out" + " out/" + version);
 
-    for &v in &version_vec[1..] {
+    for v in version_vec[1..].iter() {
         let _ = Command::new("forge")
             .args([
                 "build",
@@ -851,7 +854,7 @@ fn init_cache_file() -> Result<(), ErrorCode> {
                 "--out",
                 "tmp_out",
                 "--use",
-                v,
+                v.as_str(),
             ])
             .output();
         let mut v_cache: serde_json::Value =
@@ -891,8 +894,7 @@ pub fn start(
     // print!("{:?}", res.unwrap_err());
     info!("Start cleanning..");
     clean_project(worker_dir);
-    info!("Start make example cache and prepare artifacts...");
-    let _ = init_cache_file();
+    // let _ = init_cache_file();
     let mut handles = vec![];
     for i in 0..thread_num {
         info!("Starting thread {}", i);

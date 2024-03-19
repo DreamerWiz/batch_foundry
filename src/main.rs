@@ -1,7 +1,9 @@
 use std::{borrow::Borrow, env, process::exit};
 
+use chrono::{Local, TimeZone};
 use clap::{parser::ValueSource, Arg, ArgMatches, Command};
 use log::trace;
+use urlencoding::{decode, encode};
 
 mod client;
 mod server;
@@ -11,6 +13,20 @@ const COMMAND_NAME: &str = "test";
 const VERSION: &str = "1.0";
 const AUTHOR: &str = "Wiz Lee wizdaydream@gmail.com";
 const ABOUT: &str = "Developer's tool for urlencode and time format!";
+
+fn load_yml() -> types::conf::Conf {
+    let config_yaml_str = include_str!("cmd.yml");
+
+    let res: Result<types::conf::Conf, serde_yaml::Error> = serde_yaml::from_str(config_yaml_str);
+    if res.is_err() {
+        print!("Parse yaml failed");
+        exit(-3);
+    } else {
+    }
+
+    res.unwrap()
+}
+
 fn main() {
     let matches = Command::new(COMMAND_NAME)
         .version(VERSION)
@@ -93,13 +109,18 @@ fn main() {
                         .long("timeout")
                         .default_value("5")
                         .help("Timeout in secs (env: TIMEOUT)"),
-                ),
+                )
+        )
+        .subcommand(
+            Command::new("init")
+            .about("Initialize the cache files")
         )
         .get_matches();
 
     match matches.subcommand() {
         Some(("client", sub_matches)) => client(sub_matches),
         Some(("server", sub_matches)) => server(sub_matches),
+        Some(("init", sub_matches)) => init(sub_matches),
         _ => unreachable!(),
     }
 }
@@ -284,4 +305,8 @@ fn server(matches: &ArgMatches) {
         redis_worker_dir.as_str(),
         redis_list_name.as_str(),
     );
+}
+
+fn init(matches: &ArgMatches){
+    let _ = server::init_cache_file();
 }

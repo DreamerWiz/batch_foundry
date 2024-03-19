@@ -17,6 +17,7 @@ ADD app.tar.gz /
 RUN echo '#!/bin/bash \njudger server "$@"' > /usr/bin/server && chmod +x /usr/bin/server
 RUN echo '#!/bin/bash \njudger client "$@"' > /usr/bin/client && chmod +x /usr/bin/client
 
+# RUN cd /app/ && git commit -am"" && forge install OpenZeppelin/openzeppelin-contracts
 
 WORKDIR /app
 CMD server
