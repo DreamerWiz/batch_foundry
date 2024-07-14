@@ -3,7 +3,6 @@ use std::{borrow::Borrow, env, process::exit};
 use chrono::{Local, TimeZone};
 use clap::{parser::ValueSource, Arg, ArgMatches, Command};
 use log::trace;
-use urlencoding::{decode, encode};
 
 mod client;
 mod server;
@@ -13,19 +12,6 @@ const COMMAND_NAME: &str = "test";
 const VERSION: &str = "1.0";
 const AUTHOR: &str = "Wiz Lee wizdaydream@gmail.com";
 const ABOUT: &str = "Developer's tool for urlencode and time format!";
-
-fn load_yml() -> types::conf::Conf {
-    let config_yaml_str = include_str!("cmd.yml");
-
-    let res: Result<types::conf::Conf, serde_yaml::Error> = serde_yaml::from_str(config_yaml_str);
-    if res.is_err() {
-        print!("Parse yaml failed");
-        exit(-3);
-    } else {
-    }
-
-    res.unwrap()
-}
 
 fn main() {
     let matches = Command::new(COMMAND_NAME)
@@ -48,7 +34,7 @@ fn main() {
                     Arg::new("redis-host")
                         .short('r')
                         .long("redis-host")
-                        .default_value("127.0.0.1")
+                        .default_value("redis://127.0.0.1/1")
                         .help("Redis server"),
                 )
                 .arg(
@@ -62,7 +48,6 @@ fn main() {
                     Arg::new("worker-dir")
                         .short('d')
                         .long("worker-dir")
-            
                         .default_value("tmp/worker")
                         .help("The default work directory of the foundry env"),
                 )
@@ -101,7 +86,7 @@ fn main() {
                     Arg::new("job-id")
                         .short('j')
                         .long("job-id")
-                        .help("Job id offered (env: JOB_ID)")
+                        .help("Job id offered (env: JOB_ID)"),
                 )
                 .arg(
                     Arg::new("timeout")
@@ -110,11 +95,15 @@ fn main() {
                         .default_value("5")
                         .help("Timeout in secs (env: TIMEOUT)"),
                 )
+                .arg(
+                    Arg::new("connection-str")
+                        .short('c')
+                        .long("connection-str")
+                        .default_value("redis://127.0.0.1")
+                        .help("Redis connection str"),
+                ),
         )
-        .subcommand(
-            Command::new("init")
-            .about("Initialize the cache files")
-        )
+        .subcommand(Command::new("init").about("Initialize the cache files"))
         .get_matches();
 
     match matches.subcommand() {
@@ -126,72 +115,97 @@ fn main() {
 }
 
 fn client(matches: &ArgMatches) {
-
     let mut directory;
-    let mut question_no; 
-    let mut solc_version; 
+    let mut question_no;
+    let mut solc_version;
     let mut job_id;
     let mut timeout;
+    let mut connection_str;
 
     directory = String::from("usercode"); // default value
     let dir_env = env::var("DIRECTORY");
-    if dir_env.is_ok(){
+    if dir_env.is_ok() {
         directory = dir_env.unwrap();
     }
-    if matches.value_source("directory") == Some(ValueSource::CommandLine){
+    if matches.value_source("directory") == Some(ValueSource::CommandLine) {
         directory = matches.get_one::<String>("directory").unwrap().to_string();
     }
 
     question_no = String::from("");
     let question_no_env = env::var("QUESTION_NO");
-    if question_no_env.is_ok(){
+    if question_no_env.is_ok() {
         question_no = question_no_env.unwrap();
     }
-    if matches.value_source("question-no") == Some(ValueSource::CommandLine){
-        question_no = matches.get_one::<String>("question-no").unwrap().to_string();
+    if matches.value_source("question-no") == Some(ValueSource::CommandLine) {
+        question_no = matches
+            .get_one::<String>("question-no")
+            .unwrap()
+            .to_string();
     }
 
-    if question_no.len() == 0{
+    if question_no.len() == 0 {
         println!("Question no should not be empty, please set it via env QUESTION_NO or pass it by --question-no <question-no>");
         return;
     }
 
     solc_version = String::from("0.8.20");
     let solc_env = env::var("SOLC_VERSION");
-    if solc_env.is_ok(){
+    if solc_env.is_ok() {
         solc_version = solc_env.unwrap();
     }
-    if matches.value_source("solc-version") == Some(ValueSource::CommandLine){
-        solc_version = matches.get_one::<String>("solc-version").unwrap().to_string();
+    if matches.value_source("solc-version") == Some(ValueSource::CommandLine) {
+        solc_version = matches
+            .get_one::<String>("solc-version")
+            .unwrap()
+            .to_string();
     }
 
     job_id = String::from("");
     let job_id_env = env::var("JOB_ID");
-    if job_id_env.is_ok(){
+    if job_id_env.is_ok() {
         job_id = job_id_env.unwrap();
     }
-    if matches.value_source("job-id") == Some(ValueSource::CommandLine){
+    if matches.value_source("job-id") == Some(ValueSource::CommandLine) {
         job_id = matches.get_one::<String>("job-id").unwrap().to_string();
     }
 
-    if job_id.len() == 0{
+    if job_id.len() == 0 {
         println!("Job id no should not be empty, please set it via env JOB_ID or pass it by --job-id <job-id>");
         return;
     }
 
     timeout = String::from("5");
     let timeout_env = env::var("TIMEOUT");
-    if timeout_env.is_ok(){
+    if timeout_env.is_ok() {
         timeout = timeout_env.unwrap();
     }
-    if matches.value_source("timeout") == Some(ValueSource::CommandLine){
+    if matches.value_source("timeout") == Some(ValueSource::CommandLine) {
         timeout = matches.get_one::<String>("timeout").unwrap().to_string();
     }
 
+    connection_str = String::from("127.0.0.1:6379");
+    let connection_str_env = env::var("CONNECTION_STR");
+    if connection_str_env.is_ok() {
+        connection_str = connection_str_env.unwrap();
+    }
+    if matches.value_source("connection-str") == Some(ValueSource::CommandLine) {
+        connection_str = matches
+            .get_one::<String>("connection-str")
+            .unwrap()
+            .to_string();
+    }
+
     // print!("{}", dir);
-    let res = client::request(directory, solc_version, question_no, job_id, timeout);
+    let res = client::request(
+        directory,
+        solc_version,
+        question_no,
+        job_id,
+        timeout,
+        connection_str,
+    );
     if res.is_err() {
-        // print!("{}", "Error");
+        print!("{:?}", res.unwrap_err());
     }
 }
 
@@ -296,7 +310,10 @@ fn server(matches: &ArgMatches) {
     let redis_worker_dir = redis_worker_dir_holder.unwrap();
     let redis_list_name = redis_list_name_holder.unwrap();
 
-    print!("{} {} {} {} {}", thread_num, redis_host, redis_prefix, redis_worker_dir, redis_list_name);
+    print!(
+        "{} {} {} {} {}",
+        thread_num, redis_host, redis_prefix, redis_worker_dir, redis_list_name
+    );
 
     server::start(
         thread_num.parse::<i32>().unwrap(),
@@ -307,6 +324,6 @@ fn server(matches: &ArgMatches) {
     );
 }
 
-fn init(matches: &ArgMatches){
+fn init(matches: &ArgMatches) {
     let _ = server::init_cache_file();
 }

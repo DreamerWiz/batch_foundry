@@ -5,7 +5,7 @@ use std::{
     time::SystemTime,
 };
 
-use clap::{error, Error};
+use clap::{builder::Str, error, Error};
 use log::info;
 use log4rs::encode::json;
 use redis::{Commands, ConnectionLike, Script};
@@ -58,9 +58,10 @@ pub fn request(
     question_no: String,
     job_id: String,
     timeout: String,
+    connection_str: String
 ) -> Result<(), ErrorCode> {
     let start_time = SystemTime::now();
-    let get_conn_res = get_redis_conn();
+    let get_conn_res = get_redis_conn(&connection_str);
     if get_conn_res.is_err() {
         // println!("Redis connection error");
         return Err(get_conn_res.err().unwrap());
@@ -217,8 +218,8 @@ fn recursive_get_string(
     Ok(())
 }
 
-fn get_redis_conn() -> Result<Box<redis::Connection>, ErrorCode> {
-    let redis_client_result = redis::Client::open(REDIS_CONNECTION_STR);
+fn get_redis_conn(connection_str: &str) -> Result<Box<redis::Connection>, ErrorCode> {
+    let redis_client_result = redis::Client::open(connection_str);
 
     if redis_client_result.is_err() {
         return Err(ErrorCode::RedisInitErr(redis_client_result.unwrap_err()));

@@ -80,9 +80,8 @@ function generatePrefixedRandomString(prefixLength: number, randomStringLength: 
 
     // console.log("docker run -t --rm --network host judger smc-open-solc-judger client -n " + dir + " -d " + temp_dir + " --job-id " + judgeJobId + " --timeout 5");
 
-    const cmd = "docker run -t --rm --network host -v ./" + temp_dir + ":/app/request smc-solc-judger:v1.0 client -n " + dir + " --job-id " + judgeJobId + " --timeout 5";
-
-    // console.log(cmd);
+    const cmd = "docker run -t --rm --network host -v ./" + temp_dir + ":/app/usercode batch-foundry client -n " + dir + " --job-id " + judgeJobId + " --timeout 5";
+    console.log(cmd);
     let res = execSync(cmd);
 
     // console.log(new String(res));
@@ -93,7 +92,7 @@ function generatePrefixedRandomString(prefixLength: number, randomStringLength: 
 
     const endTime = Date.now();
 
-
+    console.log(json);
     if (json["info"] == "Timeout") {
       logRed(dir + " ans[" + random_ans[random_ans.length - 5] + "]" + " " + judgeJobId + " " + json["costTime"] + " " + json["info"] + " scriptTime("+(endTime - start)/1000.0+"s)");
     } else {

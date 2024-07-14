@@ -258,9 +258,7 @@ fn worker_thread(
 ) -> Result<(), ErrorCode> {
     let color = WORKER_TERMINAL_COLORS[num as usize];
 
-    let connection_str = format!("redis://{}", redis_host);
-
-    let redis_client_result = redis::Client::open(connection_str);
+    let redis_client_result = redis::Client::open(redis_host);
 
     let base_path = Path::new(worker_dir).join(format!("{:02}", num).as_str());
 
@@ -287,10 +285,16 @@ fn worker_thread(
     loop {
         // sleep 20ms
         thread::sleep(Duration::from_millis(20));
-        let x: Result<Value, RedisError> = conn.blpop(&redis_list_name, 1);
+        let x: Result<Value, RedisError> = conn.blpop(format!("{}:requests", redis_prefix), 1);
 
         if x.is_err() {
-            // error!("{}", x.unwrap_err().to_string());
+            color_log!(
+                color,
+                trace,
+                "[Thread {}:] {}",
+                num,
+                x.unwrap_err().to_string()
+            );
             continue;
         } else {
         }
@@ -318,16 +322,33 @@ fn worker_thread(
             num,
             job.question_no
         );
+
+        let request_key = format!("{}:{}:{}", &redis_prefix, &job.job_key, "request");
+        let request_v: Result<redis::Value, RedisError> = conn.get(&request_key);
+        if request_v.is_err() {
+            let mut json = json!({});
+            json["jobId"] = json!(&job.judge_job_id);
+            json["code"] = json!(3);
+            json["msg"] = json!("Timeout");
+            let _: Result<redis::Value, redis::RedisError> = conn
+                .lpush::<String, String, redis::Value>(
+                    format!("{}:responses", redis_prefix),
+                    json.to_string(),
+                );
+            continue;
+        } else {
+        }
+
         //  Create files as the path
         let res = create_files_as_job_message(&job, num, worker_dir);
         if let Err(ErrorCode::EmptyFile) = res {
-          color_log!(
-              color,
-              error,
-              "[Thread {}:] No files created, check {}",
-              num,
-              &job.question_no
-          );
+            color_log!(
+                color,
+                error,
+                "[Thread {}:] No files created, check {}",
+                num,
+                &job.question_no
+            );
         }
 
         // Start forge build
@@ -405,27 +426,31 @@ fn worker_thread(
             );
         }
 
-        let request_key = format!("{}:{}", &job.job_key, "request");
-        color_log!(color, info, "[Thread {}:] Output path {}", num, &output_path.as_os_str().to_str().unwrap());
-        let request_v: Result<redis::Value, RedisError> = conn.get(&request_key);
-        if request_v.is_err() {
-            color_log!(
-                color,
-                error,
-                "[Thread {}:] No such key {}",
-                num,
-                &request_key
-            );
-        } else {
-            let response_key = format!("{}:{}", &job.job_key, "response");
-            // color_log!(color, error, "{}", output_path.as_os_str().to_str().unwrap());
-            let _ = write_response_if_request_exist(
-                &request_key,
-                &response_key,
-                &fs::read_to_string(output_path).unwrap(),
-                &mut conn,
-            );
-        }
+        let request_key = format!("{}:{}:{}", &redis_prefix, &job.job_key, "request");
+        color_log!(color, info, "[Thread {}:] {}", num, &request_key);
+
+        color_log!(
+            color,
+            info,
+            "[Thread {}:] Output path {}",
+            num,
+            &output_path.as_os_str().to_str().unwrap()
+        );
+        let response_key = format!("{}:{}", &redis_prefix, "responses");
+        // color_log!(color, error, "{}", output_path.as_os_str().to_str().unwrap());
+
+        let mut json = json!({});
+        json["jobId"] = json!(&job.judge_job_id);
+        json["code"] = json!(3);
+        json["msg"] = json!("Timeout");
+
+        let _ = write_response_if_request_exist(
+            &request_key,
+            &response_key,
+            &fs::read_to_string(output_path).unwrap(),
+            &json.to_string(),
+            &mut conn,
+        );
         // let _ = clean_contracts_and_test_dir(&job, num);
     }
     Ok(())
@@ -435,15 +460,17 @@ fn write_response_if_request_exist(
     request_key: &str,
     response_key: &str,
     response: &str,
+    timeout_response: &str,
     conn: &mut redis::Connection,
 ) -> Result<(), ErrorCode> {
     let script = Script::new(
         "
     if redis.call('exists', KEYS[1]) == 1 then
         redis.call('del', KEYS[1])
-        redis.call('set', KEYS[2], ARGV[1])
+        redis.call('lpush', KEYS[2], ARGV[1])
         return 1
     else
+        redis.call('lpush', KEYS[2], ARGV[2])
         return 0
     end
   ",
@@ -453,6 +480,7 @@ fn write_response_if_request_exist(
         .key(request_key)
         .key(response_key)
         .arg(response)
+        .arg(timeout_response)
         .invoke::<i32>(conn);
     if res.is_err() {
         println!("{}", res.unwrap_err());
@@ -575,6 +603,7 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
         let mut json = json!({});
         json["info"] = json!("Compile failed");
         json["code"] = json!(1);
+        json["jobId"] = json!(&job.judge_job_id);
         json["msg"] = json!(result.as_str());
         let _ = fs::write(output_path.join("output.json"), json.to_string());
         return Err(ErrorCode::ForgeCompileFailure(result));
@@ -597,6 +626,26 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
         ])
         .output();
 
+    color_log!(
+        WORKER_TERMINAL_COLORS[worker_num as usize],
+        trace,
+        "{:?}",
+        Command::new("forge").args([
+            "test",
+            "--contracts",
+            base_path.as_os_str().to_str().unwrap(),
+            "--cache-path",
+            cache_path.as_os_str().to_str().unwrap(),
+            "--out",
+            out_path.as_os_str().to_str().unwrap(),
+            "--json",
+            "--use",
+            &job.solc_version,
+            "--offline",
+            "--allow-failure",
+        ])
+    );
+
     if res.is_err() {
         // error!("{}", res.as_ref().unwrap_err().to_string());
         return Err(ErrorCode::ForgeTestFailure(res.unwrap_err().to_string()));
@@ -613,21 +662,20 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
             "Test out is not json."
         );
 
-
         let mut json = json!({});
         json["info"] = json!("Result not json");
         json["code"] = json!(2);
+        json["jobId"] = json!(&job.judge_job_id);
         json["msg"] = json!("No files");
 
-
         let write_res = fs::write(output_path.join("output.json"), json.to_string());
-        if write_res.is_err(){
-        color_log!(
-          WORKER_TERMINAL_COLORS[worker_num as usize],
-          error,
-          "Write file error {}",
-          write_res.unwrap_err().to_string()
-      );
+        if write_res.is_err() {
+            color_log!(
+                WORKER_TERMINAL_COLORS[worker_num as usize],
+                error,
+                "Write file error {}",
+                write_res.unwrap_err().to_string()
+            );
         }
         return Err(ErrorCode::EmptyFile);
     }
@@ -680,6 +728,7 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
     output["info"] = json!("Complete");
     output["code"] = json!(0);
     output["msg"] = json!("Complete");
+    output["jobId"] = json!(&job.judge_job_id);
 
     let _ = fs::write(output_path.join("output.json"), output.to_string());
 
@@ -697,7 +746,6 @@ fn collect_output_from_test_scripts(basepath: &Path) -> Result<(), ErrorCode> {
 
     let _ = fs::remove_dir_all(output.clone());
     let res = fs::create_dir_all(output.clone());
-
 
     let test_dir_entries_res = fs::read_dir(test_dir);
     if test_dir_entries_res.is_err() {
@@ -717,7 +765,9 @@ fn collect_output_from_test_scripts(basepath: &Path) -> Result<(), ErrorCode> {
         let file_content = String::from_utf8_lossy(&file_content).into_owned();
         // println!("{}", file_content);
 
-        let re = Regex::new(r"\/\*[^@]*(@[^\@\/]*)+\*\/\s*function\s(test_[^\(]+)").unwrap();
+        let re =
+            Regex::new(r"function\s+(test[^\(\s]+)\s*\([^)]*\)[^\{]*?\{\s*(\/\*\*[^\\]*?\*\/)?")
+                .unwrap();
 
         let res: Vec<&str> = re.find_iter(&file_content).map(|m| m.as_str()).collect();
 
@@ -776,9 +826,9 @@ pub fn init_cache_file() -> Result<(), ErrorCode> {
         return Ok(());
     }
 
-    let mut version_vec:Vec<String> = vec![];
+    let mut version_vec: Vec<String> = vec![];
 
-    for i in 0..23{
+    for i in 0..26 {
         version_vec.push("0.8.".to_owned() + i.to_string().as_str());
     }
 

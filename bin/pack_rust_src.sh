@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 rm -rf rust-build/ && mkdir rust-build
 content_list="src Cargo.toml"
 for content in $content_list
