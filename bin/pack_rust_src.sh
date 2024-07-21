@@ -1,7 +1,8 @@
 #!/bin/zsh
 rm -rf rust-build/ && mkdir rust-build
-content_list="src Cargo.toml"
-for content in $content_list
+rm -rf foundry/target
+content_list=("src" "Cargo.toml" "foundry")
+for content in "${content_list[@]}"
 do
     echo "cp $content rust-build/"
     cp -r $content rust-build/
@@ -9,8 +10,8 @@ done
 
 
 rm -rf app/ && mkdir app
-content_list="lib foundry.toml log4rs.yaml remappings.txt"
-for content in $content_list
+content_list=("lib" "foundry.toml" "log4rs.yaml" "remappings.txt")
+for content in "${content_list[@]}"
 do
     echo "cp $content app/"
     cp -r $content app/ 

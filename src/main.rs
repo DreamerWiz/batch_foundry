@@ -28,35 +28,37 @@ fn main() {
                         .short('t')
                         .long("thread-num")
                         .default_value("5")
-                        .help("How many threads do you want"),
+                        .help("How many threads do you want(env: THREAD_NUM)"),
                 )
                 .arg(
                     Arg::new("redis-host")
                         .short('r')
                         .long("redis-host")
                         .default_value("redis://127.0.0.1/1")
-                        .help("Redis server"),
+                        .help("Redis server(env: REDIS_HOST)"),
                 )
                 .arg(
                     Arg::new("redis-prefix")
                         .short('p')
                         .long("redis-prefix")
                         .default_value("smc-open-solidity-judge")
-                        .help("Prefix of the redis operations"),
+                        .help("Prefix of the redis operations(env: REDIS_PREFIX)"),
                 )
                 .arg(
                     Arg::new("worker-dir")
                         .short('d')
                         .long("worker-dir")
                         .default_value("tmp/worker")
-                        .help("The default work directory of the foundry env"),
+                        .help(
+                            "The default work directory of the foundry env(env: REDIS_WORKER_DIR)",
+                        ),
                 )
                 .arg(
                     Arg::new("redis-list-name")
                         .short('n')
                         .long("redis-list-name")
                         .default_value("test")
-                        .help("Redis list name"),
+                        .help("Redis list name(env: REDIS_LIST_NAME)"),
                 ),
         )
         .subcommand(

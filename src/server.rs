@@ -73,6 +73,7 @@ pub enum ErrorCode {
     ForgeCompileFailure(String),
     ForgeTestFailure(String),
     ResultJsonReadFailure(String),
+    UpdateCacheOutPathNotExist(),
     EmptyFile,
 }
 
@@ -285,6 +286,7 @@ fn worker_thread(
     loop {
         // sleep 20ms
         thread::sleep(Duration::from_millis(20));
+        // println!("{}:requests", redis_prefix);
         let x: Result<Value, RedisError> = conn.blpop(format!("{}:requests", redis_prefix), 1);
 
         if x.is_err() {
@@ -452,7 +454,48 @@ fn worker_thread(
             &mut conn,
         );
         // let _ = clean_contracts_and_test_dir(&job, num);
+
+        // update cache
+        let _ = commit_update_cache_task(
+            &job,
+            worker_dir,
+            Path::new("tmp/worker")
+                .join(format!("{:02}", num))
+                .join(&job.question_no)
+                .as_path(),
+            job.solc_version.as_str(),
+        );
     }
+    Ok(())
+}
+
+fn commit_update_cache_task(
+    job: &JobMessage,
+    worker_dir: &str,
+    path: &Path,
+    version: &str,
+) -> Result<(), ErrorCode> {
+    let cur_dir = path;
+    let cache_path = cur_dir.join("cache/solidity-files-cache.json");
+    let out_path = cur_dir.join("out");
+
+    if out_path.is_dir() {
+        let entries_res = fs::read_dir(out_path);
+        if entries_res.is_err() {
+            return Err(ErrorCode::UpdateCacheOutPathNotExist());
+        }
+        let entries = entries_res.unwrap();
+        let skip_entires = [version, "build-info"];
+        for entry in entries {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if skip_entires.contains(&path.file_name().take().unwrap().to_str().unwrap()) {
+                continue;
+            }
+            println!("{:?}", path.file_name());
+        }
+    }
+
     Ok(())
 }
 
@@ -568,6 +611,26 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
             .to_string_lossy()
             .into_owned();
         let _ = symlink(&src_path_str, &dst_path_str);
+
+        let src_build_info_path = env::current_dir()
+            .unwrap()
+            .to_path_buf()
+            .join("out")
+            .join(job.solc_version.as_str())
+            .join("build-info")
+            .as_os_str()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let dst_build_info_path = env::current_dir()
+            .unwrap()
+            .to_path_buf()
+            .join(&out_path)
+            .join("build-info")
+            .to_string_lossy()
+            .into_owned();
+        let _ = symlink(&src_build_info_path, &dst_build_info_path);
     }
 
     // error!("{}", res.unwrap_err().to_string());
@@ -575,6 +638,16 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
     let output_path = base_path.join("output");
     let contracts_path = base_path.join("contracts");
     let test_path = base_path.join("test");
+
+    color_log!(
+        WORKER_TERMINAL_COLORS[worker_num as usize],
+        info,
+        "forge build --contracts {} --cache-path {} --out {} --use {}",
+        base_path.as_os_str().to_str().unwrap(),
+        cache_path.as_os_str().to_str().unwrap(),
+        out_path.as_os_str().to_str().unwrap(),
+        &job.solc_version,
+    );
 
     let res = Command::new("forge")
         .args([
@@ -592,6 +665,12 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
 
     if res.is_err() {
         // error!("{}", res.as_ref().unwrap_err().to_string());
+        let mut json = json!({});
+        json["info"] = json!("Forge build failed");
+        json["code"] = json!(1);
+        json["jobId"] = json!(&job.judge_job_id);
+        json["msg"] = json!(res.as_ref().unwrap_err().to_string());
+        let _ = fs::write(output_path.join("output.json"), json.to_string());
         return Err(ErrorCode::ForgeBuildFailure(res.unwrap_err().to_string()));
     }
     let stderr = String::from_utf8(res.unwrap().stderr).unwrap();
@@ -629,21 +708,11 @@ fn run_forge_test(job: &JobMessage, worker_num: i8) -> Result<String, ErrorCode>
     color_log!(
         WORKER_TERMINAL_COLORS[worker_num as usize],
         trace,
-        "{:?}",
-        Command::new("forge").args([
-            "test",
-            "--contracts",
-            base_path.as_os_str().to_str().unwrap(),
-            "--cache-path",
-            cache_path.as_os_str().to_str().unwrap(),
-            "--out",
-            out_path.as_os_str().to_str().unwrap(),
-            "--json",
-            "--use",
-            &job.solc_version,
-            "--offline",
-            "--allow-failure",
-        ])
+        "forge test --contracts {} --cache-path {} --out {} --json --use {} --offline --allow=failure",
+        base_path.as_os_str().to_str().unwrap(),
+        cache_path.as_os_str().to_str().unwrap(),
+        out_path.as_os_str().to_str().unwrap(),
+        &job.solc_version,
     );
 
     if res.is_err() {
@@ -828,14 +897,26 @@ pub fn init_cache_file() -> Result<(), ErrorCode> {
 
     let mut version_vec: Vec<String> = vec![];
 
-    for i in 0..26 {
+    for i in 0..9 {
         version_vec.push("0.8.".to_owned() + i.to_string().as_str());
     }
 
     // Fistly, rebuild the out directory where the cache will be stored
-    let _ = fs::remove_dir_all("out");
-    let _ = fs::create_dir("out");
-    let _ = fs::remove_dir_all("cache");
+
+    if let Err(e) = fs::remove_dir_all("out") {
+        // eprintln!("Failed to remove 'out' directory: {}", e);
+    }
+    if let Err(e) = fs::create_dir("out") {
+        // eprintln!("Failed to create 'out' directory: {}", e);
+    }
+
+    // 删除并重新创建 "cache" 目录
+    if let Err(e) = fs::remove_dir_all("cache") {
+        // eprintln!("Failed to remove 'cache' directory: {}", e);
+    }
+    if let Err(e) = fs::create_dir("cache") {
+        eprintln!("Failed to create 'cache' directory: {}", e);
+    }
 
     let _ = Command::new("forge").arg("clean").output();
 
@@ -871,8 +952,8 @@ pub fn init_cache_file() -> Result<(), ErrorCode> {
             .unwrap()
         {
             for (compiler, loc) in compile_info.as_object_mut().unwrap() {
-                let loc_str = loc.as_str().unwrap();
-                *loc = json!(format!("{}/{}", init_version, loc_str));
+                let loc_str = loc["path"].as_str().unwrap();
+                *loc = json!({"path": format!("{}/{}", init_version, loc_str), "build_id": loc["build_id"]});
             }
         }
     }
@@ -916,8 +997,8 @@ pub fn init_cache_file() -> Result<(), ErrorCode> {
             for a in artifacts.keys() {
                 for (compiler, loc) in artifacts.get(a).unwrap().as_object().unwrap() {
                     // for(compiler, loc) in compile_info.as_object().unwrap(){
-                    example_cache["files"][file]["artifacts"][a][compiler] =
-                        json!(format!("{}/{}", v, loc.clone().take().as_str().unwrap()));
+                    let build_info = loc.clone().take();
+                    example_cache["files"][file]["artifacts"][a][compiler] = json!({"path": format!("{}/{}", compiler, build_info["path"].as_str().unwrap()), "build_id": build_info["build_id"]});
                     // }
                 }
             }
