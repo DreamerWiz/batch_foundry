@@ -4,3 +4,6 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "foundry"]
+    path = foundry
+    url = https://github.com/foundry-rs/foundry/tree/fe2acca4e379793539db80e032d76ffe0110298b
